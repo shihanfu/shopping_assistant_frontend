@@ -465,6 +465,7 @@ async function clearChat() {
 <style>
 body {
   line-height: 1.5;
+  font-size: 22px;
 }
 </style>
 
@@ -499,7 +500,7 @@ body {
 .message {
   margin-bottom: 15px;
   padding: 4px 10px;
-  border-radius: 16px;
+  border-radius: 20px 20px 0px 20px;
   color: var(--color-text); // Ensure text color is set
 
   p {
@@ -518,7 +519,7 @@ body {
   }
 
   &.assistant {
-    background-color: #E6E5EB;
+    background-color: white;
     text-align: left;
     
     // Markdown styling
