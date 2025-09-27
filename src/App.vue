@@ -590,6 +590,7 @@ body {
   display: flex;
   background: white;
   border-radius: 16px;
+  border: 1px solid #e0e0e0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   margin-bottom: 12px;
   overflow: hidden;
