@@ -16,6 +16,29 @@
             </p>
             <!-- Assistant messages: text or card -->
             <div v-else-if="item.type === 'text' && message.role === 'assistant'" v-html="renderMarkdown(item.text)" class="message-text"></div>
+            <div v-else-if="item.type === 'tool_use' && message.role === 'assistant'" class="message-text">
+              <p v-if="item.tool === 'visit_product'">🔍 Looking into product details...</p>
+              <p v-else-if="item.tool === 'search'">🔎 Searching for products...</p>
+              <p v-else>⚙️ {{ item.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }}...</p>
+              <!-- <p>The assistant is trying to {{ item.tool }}</p> -->
+              <!-- <p>Input: {{ item.input }}</p> -->
+            </div>
+            <div v-else-if="item.type === 'unfinished-card' && message.role === 'assistant'" class="unfinished-card-container">
+              <div class="unfinished-card">
+                <div class="unfinished-card-content">
+                  <div class="unfinished-card-header">
+                    <span class="unfinished-card-title">Agent is working on your product recommendation</span>
+                  </div>
+                  <div class="unfinished-card-body">
+                    <div class="loading-dots">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div v-else-if="item.type === 'card' && message.role === 'assistant'" class="pc-card-container">
               <div v-for="(product, productIndex) in item.card.data" :key="productIndex" class="pc-product-card">
                 <div class="pc-card-image">
@@ -43,13 +66,13 @@
         </div>
         <div class="space" v-if="message.role == 'assistant'"></div>
       </div>
-      <!-- Loading indicator -->
+      <!-- Loading indicator
       <div class="row">
         <div v-if="isAssistantTyping" class="message assistant">
           <p>Assistant is typing...</p>
         </div>
         <div class="space"></div>
-      </div>
+      </div> -->
     </div>
     <div class="input-container">
       <n-input-group>
@@ -81,7 +104,8 @@ const md = new MarkdownIt()
 
 // const SERVER_URL = "http://localhost:5000"
 // const SERVER_URL = "http://52.91.223.130:5000"
-const SERVER_URL = "http://52.91.223.130/api"
+// const SERVER_URL = "http://52.91.223.130/api"
+import { SERVER_URL } from './config'
 
 // ============ Local storage keys ============
 const LS_KEYS = {
@@ -103,7 +127,7 @@ interface ProductItem {
   rating: number; review_count: number; reason: string
 }
 interface ProductCardJSON { type: 'product_card'; version: '1.0'; data: ProductItem[] }
-type MessageItem = { type:'text'; text:string } | { type:'card'; card: ProductCardJSON }
+type MessageItem = { type:'text'; text:string } | { type:'card'; card: ProductCardJSON } | { type:'tool_use'; tool:string; input:string } | { type:'unfinished-card'; text:string }
 interface Message { id: number; role: 'user' | 'assistant' | 'system'; content: MessageItem[] }
 
 // ========= State =========
@@ -141,27 +165,10 @@ const extractFencedContent = (text: string): string | null => {
   const m2 = text.match(/```product_card\s*([\s\S]*?)\s*```/); if (m2) return m2[1].trim()
   return null
 }
-const findJsonBoundaries = (text: string, start: number): { start: number; end: number } | null => {
-  if (text[start] !== '{') return null
-  let brace = 0, inStr = false, esc = false
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i]
-    if (esc) { esc = false; continue }
-    if (ch === '\\') { esc = true; continue }
-    if (ch === '"' && !esc) { inStr = !inStr; continue }
-    if (!inStr) {
-      if (ch === '{') brace++
-      else if (ch === '}') {
-        brace--
-        if (brace === 0) return { start, end: i + 1 }
-      }
-    }
-  }
-  return null
-}
 const parseMessageContent = (text: string): MessageItem[] => {
   const frags: MessageItem[] = []
   let idx = 0
+  
   while (idx < text.length) {
     const fenced = text.slice(idx).match(/```(?:json|product_card)\s*([\s\S]*?)\s*```/)
     if (fenced) {
@@ -181,27 +188,25 @@ const parseMessageContent = (text: string): MessageItem[] => {
       }
       idx = end
     } else {
-      const jsStart = text.indexOf('{', idx)
-      if (jsStart === -1) {
-        const rest = text.slice(idx)
-        if (rest.trim()) frags.push({ type: 'text', text: rest })
-        break
+      // Check for incomplete product card at the end
+      const incompleteCardMatch = text.slice(idx).match(/```(?:json|product_card)\s*([\s\S]*)$/)
+      if (incompleteCardMatch) {
+        const start = idx + (incompleteCardMatch.index ?? 0)
+        if (start > idx) {
+          const before = text.slice(idx, start)
+          if (before.trim()) frags.push({ type: 'text', text: before })
+        }
+        // Add the incomplete card
+        const incompleteCardText = text.slice(start)
+        frags.push({ type: 'unfinished-card', text: incompleteCardText })
+        //debugger
+        return frags
       }
-      if (jsStart > idx) {
-        const before = text.slice(idx, jsStart)
-        if (before.trim()) frags.push({ type: 'text', text: before })
-      }
-      const bounds = findJsonBoundaries(text, jsStart)
-      if (bounds) {
-        const jtxt = text.slice(bounds.start, bounds.end)
-        const parsed = safeJsonParse(jtxt)
-        if (parsed && validateProductCard(parsed)) frags.push({ type: 'card', card: parsed })
-        else frags.push({ type: 'text', text: jtxt })
-        idx = bounds.end
-      } else {
-        frags.push({ type: 'text', text: text[jsStart] })
-        idx = jsStart + 1
-      }
+      
+      // No more fenced blocks, add remaining text
+      const rest = text.slice(idx)
+      if (rest.trim()) frags.push({ type: 'text', text: rest })
+      break
     }
   }
   return frags
@@ -324,6 +329,7 @@ async function reloadFromServer(): Promise<boolean> {
   }
 }
 
+
 async function sendMessage() {
   if (userInput.value.trim() === '') return
 
@@ -344,47 +350,94 @@ async function sendMessage() {
   isLoading.value = true
   isAssistantTyping.value = true
 
-  const doPost = async () => {
+
+  const createEventSource = async () => {
     // Get parent url
     await Promise.race([parentUrlReady, new Promise(r => setTimeout(r, 1500))])
     const urlForSend = getUrlForSend()
-    console.log('[IFRAME] /chat current_url =', urlForSend)
+    console.log('[IFRAME] /chat-stream current_url =', urlForSend)
     
-    return fetch(`${SERVER_URL}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId.value, message: messageText, current_url: urlForSend || null })
+    // Create EventSource URL with query parameters
+    const params = new URLSearchParams({
+      session_id: sessionId.value!,
+      message: messageText,
+      current_url: urlForSend || ''
     })
+    
+    return new EventSource(`${SERVER_URL}/chat-stream?${params.toString()}`)
   }
 
   try {
-    let resp = await doPost()
 
-    // If 404, the old session is invalid: recreate and retry once
-    if (resp.status === 404) {
-      console.warn('⚠️ /chat 404, recreating session and retrying…')
-      sessionId.value = null
-      localStorage.removeItem(LS_KEYS.sessionId)
-      await createSession()
-      if (!sessionId.value) throw new Error('recreate session failed')
-      resp = await doPost()
+    
+    // Create initial assistant message for streaming
+    const currentMessageId = Date.now() + 1
+    const assistantMessage: Message = {
+      id: currentMessageId,
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Assistant is typing...' }]
     }
+    messages.value.push(assistantMessage)
+    nextTick(() => document.querySelector('.chat-container')?.scrollTo({ top: 9e9, behavior: 'smooth' }))
 
-    if (!resp.ok) {
-      console.error(`❌ Failed to send message: ${await resp.text()}`)
-      return
-    }
-    const data = await resp.json()
-    if (data.success) {
-      const fragments = parseMessageContent(data.response ?? '')
-      messages.value.push({ id: Date.now() + 1, role: 'assistant', content: fragments })
-      nextTick(() => document.querySelector('.chat-container')?.scrollTo({ top: 9e9, behavior: 'smooth' }))
-    } else {
-      console.error('API returned success: false')
-    }
+    // Use EventSource for streaming
+    const eventSource = await createEventSource()
+    
+    let currentText = ''
+
+    // Handle message events
+    eventSource.addEventListener('message', (event) => {
+      try {
+        const parsed = JSON.parse(event.data)
+        console.log('parsed', parsed)
+        
+        if (parsed.type === 'text') {
+          currentText += parsed.content
+          messages.value[messages.value.length - 1].content = parseMessageContent(currentText + "  ...  ")
+          // console.log(JSON.stringify(messages.value));
+          // console.log(JSON.stringify(visibleMessages.value));
+          nextTick(() => document.querySelector('.chat-container')?.scrollTo({ top: 9e9, behavior: 'smooth' }))
+        } else if (parsed.type === 'done') {
+          // Stream is complete, parse the final content for cards
+          const finalFragments = parseMessageContent(currentText)
+          messages.value[messages.value.length - 1].content = finalFragments
+          nextTick(() => document.querySelector('.chat-container')?.scrollTo({ top: 9e9, behavior: 'smooth' }))
+          eventSource.close()
+          isLoading.value = false
+          isAssistantTyping.value = false
+        } else if (parsed.type === 'error') {
+          messages.value[messages.value.length - 1].content = [{ type: 'text', text: "ERROR: " + parsed.content }]
+          eventSource.close()
+          isLoading.value = false
+          isAssistantTyping.value = false
+        } else if (parsed.type === 'tool_use') {
+          messages.value[messages.value.length - 1].content = [{ type: 'text', text: currentText }]
+          messages.value.push({ id: Date.now(), role: 'assistant', content: [{ type: 'tool_use', tool: parsed.tool, input: parsed.input }] })
+          currentText = ""
+          messages.value.push({ id: Date.now(), role: 'assistant', content: [{ type: 'text', text: "..." }] })
+          // messages.value[messages.value.length - 1].content = [{ type: 'text', text: "TOOL: " + parsed.content }]
+        }
+        nextTick(() => document.querySelector('.chat-container')?.scrollTo({ top: 9e9, behavior: 'smooth' }))
+      } catch (e) {
+        console.warn('Failed to parse SSE data:', event.data, e)
+      }
+    })
+
+    // Handle errors
+     eventSource.addEventListener('error', () => {
+       // console.error('EventSource error:', event)
+       eventSource.close()
+       isLoading.value = false
+       isAssistantTyping.value = false
+     })
+
+    // Handle connection open
+    eventSource.addEventListener('open', () => {
+      console.log('EventSource connection opened')
+    })
+
   } catch (e) {
     console.error('sendMessage error:', e)
-  } finally {
     isLoading.value = false
     isAssistantTyping.value = false
   }
@@ -411,7 +464,7 @@ async function clearChat() {
       sessionId.value = null
       localStorage.removeItem(LS_KEYS.sessionId)
 
-      // 3) Immediately create a brand-new session (avoid subsequent /chat 404)
+      // 3) Immediately create a brand-new session (avoid subsequent /chat-stream 404)
       await createSession()
 
       // (Optional) add a system message
@@ -672,6 +725,83 @@ body {
   :deep(ul) {
     list-style-type: disc;
     list-style-position: inside;
+  }
+}
+
+/* Unfinished Card Styles */
+.unfinished-card-container {
+  margin: 10px 0;
+}
+
+.unfinished-card {
+  display: flex;
+  background: #f8f9fa;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 2px dashed #dee2e6;
+  min-height: 120px;
+}
+
+.unfinished-card-content {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.unfinished-card-header {
+  margin-bottom: 16px;
+}
+
+.unfinished-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #6c757d;
+}
+
+.unfinished-card-body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #6c757d;
+  animation: loading-dots 1.4s infinite ease-in-out both;
+}
+
+.loading-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0s;
+}
+
+@keyframes loading-dots {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 </style>
