@@ -138,9 +138,24 @@ const isLoading = ref(true)
 const isAssistantTyping = ref(false)
 
 // Only expose non-hidden messages to the template
-const visibleMessages = computed(() =>
-  ((messages.value as any[]) ?? []).filter(m => !m?.hidden)
-)
+const visibleMessages = computed(() => {
+  const allMessages = (messages.value as any[]) ?? []
+  const visible = allMessages.filter(m => !m?.hidden)
+  
+  console.log('🔍 visibleMessages computed:', {
+    total: allMessages.length,
+    visible: visible.length,
+    hidden: allMessages.length - visible.length
+  })
+  
+  // Debug: show which messages are being hidden
+  const hiddenMessages = allMessages.filter(m => m?.hidden)
+  if (hiddenMessages.length > 0) {
+    console.log('🔍 Hidden messages:', hiddenMessages.map(m => ({ role: m.role, text: m.content?.[0]?.text?.substring(0, 50) + '...' })))
+  }
+  
+  return visible
+})
 
 // ========= Utility functions (retain original) =========
 const validateProductCard = (obj: any): obj is ProductCardJSON => {
@@ -303,18 +318,30 @@ async function reloadFromServer(): Promise<boolean> {
     if (!data.success || !Array.isArray(data.messages)) return false
 
     // Convert backend {role, text} to frontend Message[]
-    const flat = data.messages as Array<{ role: string; text: string; createdAt?: string }>
+    const flat = data.messages as Array<{ role: string; text: string; createdAt?: string; hidden?: boolean }>
+    console.log('🔍 Raw messages from backend:', flat)
+    
     const mapped: Message[] = flat
       .filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
       .map((m, idx) => {
         const role = m.role as Message['role']
         const id = Date.now() + idx
+        const baseMessage = { id, role, hidden: m.hidden || false }
+        
+        // Debug log for messages with "current url"
+        if (m.text && m.text.includes('current url')) {
+          console.log('🔍 Found current url message:', { text: m.text, hidden: m.hidden, willBeHidden: baseMessage.hidden })
+        }
+        
         if (role === 'assistant') {
-          return { id, role, content: parseMessageContent(m.text ?? '') }
+          return { ...baseMessage, content: parseMessageContent(m.text ?? '') }
         }
         // Treat user/system as plain text blocks
-        return { id, role, content: [{ type: 'text', text: m.text ?? '' }] }
+        return { ...baseMessage, content: [{ type: 'text', text: m.text ?? '' }] }
       })
+
+    console.log('🔍 Mapped messages:', mapped)
+    console.log('🔍 Hidden messages count:', mapped.filter(m => m.hidden).length)
 
     messages.value = mapped
     // Scroll to bottom
@@ -491,6 +518,7 @@ async function clearChat() {
 <style>
 body {
   line-height: 1.5;
+  font-size: 22px;
 }
 </style>
 
@@ -525,7 +553,7 @@ body {
 .message {
   margin-bottom: 15px;
   padding: 4px 10px;
-  border-radius: 16px;
+  border-radius: 20px 20px 0px 20px;
   color: var(--color-text); // Ensure text color is set
 
   p {
@@ -544,7 +572,7 @@ body {
   }
 
   &.assistant {
-    background-color: #E6E5EB;
+    background-color: white;
     text-align: left;
     
     // Markdown styling
@@ -615,6 +643,7 @@ body {
   display: flex;
   background: white;
   border-radius: 16px;
+  border: 1px solid #e0e0e0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   margin-bottom: 12px;
   overflow: hidden;
