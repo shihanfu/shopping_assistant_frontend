@@ -19,7 +19,7 @@
             <div v-else-if="item.type === 'tool_use' && message.role === 'assistant'" class="message-text">
               <p v-if="item.tool === 'visit_product'">🔍 Looking into product details...</p>
               <p v-else-if="item.tool === 'search'">🔎 Searching for products...</p>
-              <p v-else>⚙️ {{ item.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }}...</p>
+              <p v-else>⚙️ {{ item.tool.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) }}...</p>
               <!-- <p>The assistant is trying to {{ item.tool }}</p> -->
               <!-- <p>Input: {{ item.input }}</p> -->
             </div>
@@ -341,7 +341,7 @@ async function reloadFromServer(): Promise<boolean> {
       })
 
     console.log('🔍 Mapped messages:', mapped)
-    console.log('🔍 Hidden messages count:', mapped.filter(m => m.hidden).length)
+    // console.log('🔍 Hidden messages count:', mapped.filter((m: Message) => m.hidden).length)
 
     messages.value = mapped
     // Scroll to bottom
