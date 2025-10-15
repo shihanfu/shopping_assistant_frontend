@@ -441,7 +441,7 @@ async function sendMessage() {
           messages.value[messages.value.length - 1].content = [{ type: 'text', text: currentText }]
           messages.value.push({ id: Date.now(), role: 'assistant', content: [{ type: 'tool_use', tool: parsed.tool, input: parsed.input }] })
           currentText = ""
-          messages.value.push({ id: Date.now(), role: 'assistant', content: [{ type: 'text', text: "..." }] })
+          messages.value.push({ id: Date.now(), role: 'assistant', content: [{ type: 'text', text: "Assistant is analyzing the product..." }] })
           // messages.value[messages.value.length - 1].content = [{ type: 'text', text: "TOOL: " + parsed.content }]
         }
         nextTick(() => document.querySelector('.chat-container')?.scrollTo({ top: 9e9, behavior: 'smooth' }))
