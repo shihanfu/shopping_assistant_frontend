@@ -51,13 +51,6 @@
                     </a>
                   </h3>
                   <div class="pc-price">{{ product.price }}</div>
-                  <div class="pc-rating-section">
-                    <div class="pc-stars">
-                      <div class="pc-stars-filled" :style="{ width: (product.rating / 5 * 100) + '%' }"></div>
-                    </div>
-                    <span class="pc-rating-text">{{ product.rating.toFixed(1) }}</span>
-                    <span class="pc-review-count">({{ formatReviewCount(product.review_count) }})</span>
-                  </div>
                   <p class="pc-reason">{{ product.reason }}</p>
                 </div>
               </div>
@@ -707,47 +700,10 @@ body {
   margin-bottom: 8px;
 }
 
-.pc-rating-section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.pc-stars {
-  position: relative;
-  width: 80px;
-  height: 16px;
-  background: #e5e7eb;
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.pc-stars-filled {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: #fbbf24;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.pc-rating-text {
-  font-weight: 600;
-  color: #374151;
-  font-size: 12px;
-}
-
-.pc-review-count {
-  color: #6b7280;
-  font-size: 12px;
-}
-
 .pc-reason {
   margin: 0;
   color: #4b5563;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.4;
 }
 .message-text{
