@@ -117,7 +117,7 @@ function getUrlForSend(): string | null {
 // ========= Type definitions (retain original) =========
 interface ProductItem {
   name: string; url: string; image: string; price: string;
-  rating: number; review_count: number; reason: string
+  rating?: number; review_count?: number; reason: string
 }
 interface ProductCardJSON { type: 'product_card'; version: '1.0'; data: ProductItem[] }
 type MessageItem = { type:'text'; text:string } | { type:'card'; card: ProductCardJSON } | { type:'tool_use'; tool:string; input:string } | { type:'unfinished-card'; text:string }
@@ -162,8 +162,8 @@ const validateProductCard = (obj: any): obj is ProductCardJSON => {
     typeof item.url === 'string' &&
     typeof item.image === 'string' &&
     typeof item.price === 'string' &&
-    typeof item.rating === 'number' && item.rating >= 0 && item.rating <= 5 &&
-    typeof item.review_count === 'number' && item.review_count >= 0 && Number.isInteger(item.review_count) &&
+    (item.rating === undefined || (typeof item.rating === 'number' && item.rating >= 0 && item.rating <= 5)) &&
+    (item.review_count === undefined || (typeof item.review_count === 'number' && item.review_count >= 0 && Number.isInteger(item.review_count))) &&
     typeof item.reason === 'string'
   )
 }
