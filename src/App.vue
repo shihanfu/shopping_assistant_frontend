@@ -15,11 +15,41 @@
               {{ item.text }}
             </p>
             <!-- Assistant messages: text or card -->
+            <!-- Typing indicator for "Assistant is typing..." -->
+            <div v-else-if="item.type === 'text' && message.role === 'assistant' && (item.text === 'Assistant is typing...' || item.text === 'Assistant is analyzing the product...')" class="typing-indicator">
+              <span class="typing-text">{{ item.text.replace(/\.\.\.$/, '') }}</span>
+              <span class="typing-dots">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+              </span>
+            </div>
             <div v-else-if="item.type === 'text' && message.role === 'assistant'" v-html="renderMarkdown(item.text)" class="message-text"></div>
             <div v-else-if="item.type === 'tool_use' && message.role === 'assistant'" class="message-text">
-              <p v-if="item.tool === 'visit_product'">🔍 Looking into product details...</p>
-              <p v-else-if="item.tool === 'search'">🔎 Searching for products...</p>
-              <p v-else>⚙️ {{ item.tool.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) }}...</p>
+              <div v-if="item.tool === 'visit_product'" class="typing-indicator">
+                <span class="typing-text">Looking into product details</span>
+                <span class="typing-dots">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </span>
+              </div>
+              <div v-else-if="item.tool === 'search'" class="typing-indicator">
+                <span class="typing-text">Searching for products</span>
+                <span class="typing-dots">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </span>
+              </div>
+              <div v-else class="typing-indicator">
+                <span class="typing-text">{{ item.tool.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) }}</span>
+                <span class="typing-dots">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </span>
+              </div>
               <!-- <p>The assistant is trying to {{ item.tool }}</p> -->
               <!-- <p>Input: {{ item.input }}</p> -->
             </div>
@@ -413,6 +443,13 @@ async function sendMessage() {
         
         if (parsed.type === 'text') {
           currentText += parsed.content
+          
+          // Remove previous tool_use message if exists (when streaming starts after tool use)
+          if (messages.value.length >= 2 && 
+              messages.value[messages.value.length - 2].content?.[0]?.type === 'tool_use') {
+            messages.value.splice(messages.value.length - 2, 1)
+          }
+          
           messages.value[messages.value.length - 1].content = parseMessageContent(currentText + "  ...  ")
           // console.log(JSON.stringify(messages.value));
           // console.log(JSON.stringify(visibleMessages.value));
@@ -786,6 +823,54 @@ body {
   }
   40% {
     transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Typing Indicator Styles */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typing-text {
+  font-size: 16px;
+  color: #6c757d;
+}
+
+.typing-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.typing-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #6c757d;
+  animation: typing-dot-fade 1.4s infinite ease-in-out;
+  opacity: 0;
+}
+
+.typing-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing-dot-fade {
+  0%, 100% {
+    opacity: 0;
+  }
+  50% {
     opacity: 1;
   }
 }
