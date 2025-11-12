@@ -442,15 +442,49 @@ async function sendMessage() {
         console.log('parsed', parsed)
         
         if (parsed.type === 'text') {
+          const wasEmpty = currentText === ''
           currentText += parsed.content
           
-          // Remove previous tool_use message if exists (when streaming starts after tool use)
-          if (messages.value.length >= 2 && 
-              messages.value[messages.value.length - 2].content?.[0]?.type === 'tool_use') {
-            messages.value.splice(messages.value.length - 2, 1)
+          // Remove tool_use messages and "Assistant is analyzing..." messages when streaming starts
+          // These should disappear once the actual response starts (only on first text chunk)
+          if (wasEmpty) {
+            let removedCount = 0
+            for (let i = messages.value.length - 1; i >= 0; i--) {
+              const msg = messages.value[i]
+              if (msg.role === 'assistant') {
+                const firstContent = msg.content?.[0]
+                if (firstContent?.type === 'tool_use' || 
+                    (firstContent?.type === 'text' && 
+                     (firstContent.text === 'Assistant is analyzing the product...' || 
+                      firstContent.text === 'Assistant is typing...'))) {
+                  messages.value.splice(i, 1)
+                  removedCount++
+                } else {
+                  // Stop when we hit a non-removable assistant message
+                  break
+                }
+              } else {
+                // Stop when we hit a non-assistant message
+                break
+              }
+            }
+            
+            // If we removed messages, create a new one for the streaming text
+            if (removedCount > 0) {
+              messages.value.push({
+                id: Date.now(),
+                role: 'assistant',
+                content: parseMessageContent(currentText + "  ...  ")
+              })
+            } else {
+              // Update the last message
+              messages.value[messages.value.length - 1].content = parseMessageContent(currentText + "  ...  ")
+            }
+          } else {
+            // Update the last message for subsequent chunks
+            messages.value[messages.value.length - 1].content = parseMessageContent(currentText + "  ...  ")
           }
           
-          messages.value[messages.value.length - 1].content = parseMessageContent(currentText + "  ...  ")
           // console.log(JSON.stringify(messages.value));
           // console.log(JSON.stringify(visibleMessages.value));
           nextTick(() => document.querySelector('.chat-container')?.scrollTo({ top: 9e9, behavior: 'smooth' }))
